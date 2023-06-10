@@ -34,6 +34,16 @@
 
 namespace wwiv::common {
 
+namespace {
+static const uint8_t TELNET_OPTION_IAC = 255;
+static const uint8_t TELNET_OPTION_NOP = 241;
+static const uint8_t TELNET_OPTION_BRK = 243;
+static const uint8_t TELNET_OPTION_WILL = 251;
+static const uint8_t TELNET_OPTION_WONT = 252;
+static const uint8_t TELNET_OPTION_DO = 253;
+static const uint8_t TELNET_OPTION_DONT = 254;
+} // namespace
+
 using std::chrono::milliseconds;
 using wwiv::os::sleep_for;
 using namespace wwiv::core;
@@ -63,22 +73,22 @@ bool RemotePipeIO::open() {
 
   if (telnet_) {
     {
-      unsigned char s[3] = {RemoteSocketIO::TELNET_OPTION_IAC, RemoteSocketIO::TELNET_OPTION_DONT,
+      unsigned char s[3] = {TELNET_OPTION_IAC, TELNET_OPTION_DONT,
                             RemoteSocketIO::TELNET_OPTION_ECHO};
       write(reinterpret_cast<char*>(s), 3, true);
     }
     {
-      unsigned char s[3] = {RemoteSocketIO::TELNET_OPTION_IAC, RemoteSocketIO::TELNET_OPTION_WILL,
+      unsigned char s[3] = {TELNET_OPTION_IAC, TELNET_OPTION_WILL,
                             RemoteSocketIO::TELNET_OPTION_ECHO};
       write(reinterpret_cast<char*>(s), 3, true);
     }
     {
-      unsigned char s[3] = {RemoteSocketIO::TELNET_OPTION_IAC, RemoteSocketIO::TELNET_OPTION_WILL,
+      unsigned char s[3] = {TELNET_OPTION_IAC, TELNET_OPTION_WILL,
                             RemoteSocketIO::TELNET_OPTION_SUPPRESSS_GA};
       write(reinterpret_cast<char*>(s), 3, true);
     }
     {
-      unsigned char s[3] = {RemoteSocketIO::TELNET_OPTION_IAC, RemoteSocketIO::TELNET_OPTION_DONT,
+      unsigned char s[3] = {TELNET_OPTION_IAC, TELNET_OPTION_DONT,
                             RemoteSocketIO::TELNET_OPTION_LINEMODE};
       write(reinterpret_cast<char*>(s), 3, true);
     }
@@ -100,7 +110,7 @@ unsigned int RemotePipeIO::put(unsigned char ch) {
   }
 
   unsigned char szBuffer[3] = {ch, 0, 0};
-  if (ch == RemoteSocketIO::TELNET_OPTION_IAC) {
+  if (ch == TELNET_OPTION_IAC) {
     szBuffer[1] = ch;
   }
 
@@ -331,31 +341,31 @@ std::optional<ScreenPos> RemotePipeIO::screen_position() {
 void RemotePipeIO::HandleTelnetIAC(unsigned char nCmd, unsigned char nParam) {
   // We should probably start responding to the DO and DONT options....
   switch (nCmd) {
-  case RemoteSocketIO::TELNET_OPTION_NOP : {
+  case TELNET_OPTION_NOP : {
     // TELNET_OPTION_NOP
   } break;
-  case RemoteSocketIO::TELNET_OPTION_BRK: {
+  case TELNET_OPTION_BRK: {
     // TELNET_OPTION_BRK;
   } break;
-  case RemoteSocketIO::TELNET_OPTION_WILL: {
+  case TELNET_OPTION_WILL: {
     // const string s = fmt::sprintf("[Command: %s] [Option: {%d}]\n", "TELNET_OPTION_WILL",
     // nParam);
     // ::OutputDebugString(s.c_str());
   } break;
-  case RemoteSocketIO::TELNET_OPTION_WONT: {
+  case TELNET_OPTION_WONT: {
     // const string s = fmt::sprintf("[Command: %s] [Option: {%d}]\n", "TELNET_OPTION_WONT",
     // nParam);
     // ::OutputDebugString(s.c_str());
   } break;
-  case RemoteSocketIO::TELNET_OPTION_DO: {
+  case TELNET_OPTION_DO: {
     // const string do_s = fmt::sprintf("[Command: %s] [Option: {%d}]\n", "TELNET_OPTION_DO",
     // nParam);
     // ::OutputDebugString(do_s.c_str());
     switch (nParam) {
     case RemoteSocketIO::TELNET_OPTION_SUPPRESSS_GA: {
       char s[4];
-      s[0] = RemoteSocketIO::TELNET_OPTION_IAC;
-      s[1] = RemoteSocketIO::TELNET_OPTION_WILL;
+      s[0] = TELNET_OPTION_IAC;
+      s[1] = TELNET_OPTION_WILL;
       s[2] = RemoteSocketIO::TELNET_OPTION_SUPPRESSS_GA;
       s[3] = 0;
       write(s, 3, true);
@@ -363,7 +373,7 @@ void RemotePipeIO::HandleTelnetIAC(unsigned char nCmd, unsigned char nParam) {
     } break;
     }
   } break;
-  case RemoteSocketIO::TELNET_OPTION_DONT: {
+  case TELNET_OPTION_DONT: {
     // const string dont_s = fmt::sprintf("[Command: %s] [Option: {%d}]\n", "TELNET_OPTION_DONT",
     // nParam);
     // ::OutputDebugString(dont_s.c_str());

@@ -17,6 +17,7 @@ set(COMMON_SOURCES
  "menus/menu_generator.cpp"
  "message_editor_data.cpp"
  "null_remote_io.cpp"
+ "nvt.cpp"
  "output.cpp"
  "pause.cpp"
  "pipe_expr.cpp"
@@ -59,6 +60,7 @@ if (WWIV_BUILD_TESTS)
     "input_range_test.cpp"
     "common_test_main.cpp"
     "menu_data_util_test.cpp"
+    "nvt_test.cpp"
     "pipe_expr_test.cpp"
     "remote_socket_io_test.cpp"
   )

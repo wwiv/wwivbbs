@@ -32,6 +32,7 @@ typedef int socklen_t;
 
 #endif  // _WIN32
 
+#include "common/nvt.h"
 #include "core/file.h"
 #include "core/log.h"
 #include "core/net.h"
@@ -102,24 +103,20 @@ bool RemoteSocketIO::open() {
   remote_info().address_name = GetRemotePeerHostname(socket_).value_or("");
   if (telnet_) {
     {
-      unsigned char s[3] = {RemoteSocketIO::TELNET_OPTION_IAC, RemoteSocketIO::TELNET_OPTION_DONT,
-                            RemoteSocketIO::TELNET_OPTION_ECHO};
-      write(reinterpret_cast<char*>(s), 3, true);
+      auto cmd = nvt_.create_command(Nvt::Command::DONT, Nvt::Option::ECHO);
+      write(cmd.data(), cmd.size(), true);
     }
     {
-      unsigned char s[3] = {RemoteSocketIO::TELNET_OPTION_IAC, RemoteSocketIO::TELNET_OPTION_WILL,
-                            RemoteSocketIO::TELNET_OPTION_ECHO};
-      write(reinterpret_cast<char*>(s), 3, true);
+      auto cmd = nvt_.create_command(Nvt::Command::WILL, Nvt::Option::ECHO);
+      write(cmd.data(), cmd.size(), true);
     }
     {
-      unsigned char s[3] = {RemoteSocketIO::TELNET_OPTION_IAC, RemoteSocketIO::TELNET_OPTION_WILL,
-                            RemoteSocketIO::TELNET_OPTION_SUPPRESSS_GA};
-      write(reinterpret_cast<char*>(s), 3, true);
+      auto cmd = nvt_.create_command(Nvt::Command::WILL, Nvt::Option::SUPPRESS_GA);
+      write(cmd.data(), cmd.size(), true);
     }
     {
-      unsigned char s[3] = {RemoteSocketIO::TELNET_OPTION_IAC, RemoteSocketIO::TELNET_OPTION_DONT,
-                            RemoteSocketIO::TELNET_OPTION_LINEMODE};
-      write(reinterpret_cast<char*>(s), 3, true);
+      auto cmd = nvt_.create_command(Nvt::Command::DONT, Nvt::Option::LINEMODE);
+      write(cmd.data(), cmd.size(), true);
     }
   }
 
@@ -145,7 +142,7 @@ unsigned int RemoteSocketIO::put(unsigned char ch) {
   }
 
   unsigned char szBuffer[3] = {ch, 0, 0};
-  if (ch == TELNET_OPTION_IAC) {
+  if (ch == static_cast<int>(Nvt::Command::IAC)) {
     szBuffer[1] = ch;
   }
 
@@ -426,48 +423,48 @@ std::optional<ScreenPos> RemoteSocketIO::screen_position() {
   return std::nullopt;
 }
 
-void RemoteSocketIO::HandleTelnetIAC(unsigned char nCmd, unsigned char nParam) {
-  // We should probably start responding to the DO and DONT options....
-  switch (nCmd) {
-  case TELNET_OPTION_NOP: {
-    // TELNET_OPTION_NOP
-  } break;
-  case TELNET_OPTION_BRK: {
-    // TELNET_OPTION_BRK;
-  } break;
-  case TELNET_OPTION_WILL: {
-    // const string s = fmt::sprintf("[Command: %s] [Option: {%d}]\n", "TELNET_OPTION_WILL",
-    // nParam);
-    // ::OutputDebugString(s.c_str());
-  } break;
-  case TELNET_OPTION_WONT: {
-    // const string s = fmt::sprintf("[Command: %s] [Option: {%d}]\n", "TELNET_OPTION_WONT",
-    // nParam);
-    // ::OutputDebugString(s.c_str());
-  } break;
-  case TELNET_OPTION_DO: {
-    // const string do_s = fmt::sprintf("[Command: %s] [Option: {%d}]\n", "TELNET_OPTION_DO",
-    // nParam);
-    // ::OutputDebugString(do_s.c_str());
-    switch (nParam) {
-    case TELNET_OPTION_SUPPRESSS_GA: {
-      char s[4];
-      s[0] = TELNET_OPTION_IAC;
-      s[1] = TELNET_OPTION_WILL;
-      s[2] = TELNET_OPTION_SUPPRESSS_GA;
-      s[3] = 0;
-      write(s, 3, true);
-      // Sent TELNET IAC WILL SUPPRESS GA
-    } break;
+
+int RemoteSocketIO::HandleTelnetIAC(const char* buffer, int end) {
+  CHECK_GE(end, 2);
+
+  if (auto o = nvt_.parse_sequence(std::string_view(buffer, end))) {
+    // internalize the other side's request and respond
+    const auto& seq = o.value();
+    if (seq.cmd == Nvt::Command::DO || seq.cmd == Nvt::Command::WILL) {
+      switch (seq.opt) {
+      case Nvt::Option::BINARY: {
+        nvt_.send_ack(seq.cmd, seq.opt, this);
+        set_binary_mode(true);
+      } break;
+      case Nvt::Option::SUPPRESS_GA: {
+        nvt_.send_ack(seq.cmd, seq.opt, this);
+      } break;
+      default:
+        nvt_.send_nak(seq.cmd, seq.opt, this);
+      }
     }
-  } break;
-  case TELNET_OPTION_DONT: {
-    // const string dont_s = fmt::sprintf("[Command: %s] [Option: {%d}]\n", "TELNET_OPTION_DONT",
-    // nParam);
-    // ::OutputDebugString(dont_s.c_str());
-  } break;
+    else if (seq.cmd == Nvt::Command::DONT || seq.cmd == Nvt::Command::WONT) {
+      switch (seq.opt) {
+      case Nvt::Option::BINARY: {
+        nvt_.send_nak(seq.cmd, seq.opt, this);
+        set_binary_mode(false);
+        break;
+      default:
+        nvt_.send_nak(seq.cmd, seq.opt, this);
+        break;
+      }
+      }
+    }
+    else {
+      LOG(WARNING) << "Unknown IAC sequence: " << to_string(seq);
+    }
+    return seq.length;
   }
+
+  // not sure the length, guess 2
+  return 2;
 }
+
 
 void RemoteSocketIO::AddStringToInputBuffer(int start, int end, const char* buffer) {
   // Add the data to the input buffer
@@ -501,8 +498,7 @@ void RemoteSocketIO::AddStringToInputBuffer(int start, int end, const char* buff
         queue_.push_back(buffer[i + 1]);
         i++;
       } else if ((i + 2) < end) {
-        HandleTelnetIAC(buffer[i + 1], buffer[i + 2]);
-        i += 2;
+        i += HandleTelnetIAC(&buffer[i + 1], end - (i + 1));
       } else {
         // ::OutputDebugString("WHAT THE HECK?!?!?!? 255 w/o any options or anything\r\n");
       }

@@ -54,6 +54,8 @@ using wwiv::core::Logger;
 using wwiv::core::LoggerConfig;
 using wwiv::sdk::LogDirFromConfig;
 
+#define WWIV_PAUSE_AT_START
+
 int bbsmain(int argc, char *argv[]) {
   LoggerConfig config(LogDirFromConfig);
   Logger::Init(argc, argv, config);

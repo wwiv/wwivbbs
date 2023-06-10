@@ -21,6 +21,7 @@
 
 // ReSharper disable once CppUnusedIncludeDirective
 #include "core/net.h" // INVALID_SOCKET
+#include "common/nvt.h"
 #include "common/remote_io.h"
 #include <atomic>
 #include <cstdint>
@@ -41,14 +42,6 @@ namespace wwiv::common {
 
 class RemoteSocketIO final : public RemoteIO {
  public:
-  static const uint8_t TELNET_OPTION_IAC = 255;
-  static const uint8_t TELNET_OPTION_NOP = 241;
-  static const uint8_t TELNET_OPTION_BRK = 243;
-
-  static const uint8_t TELNET_OPTION_WILL = 251;
-  static const uint8_t TELNET_OPTION_WONT = 252;
-  static const uint8_t TELNET_OPTION_DO = 253;
-  static const uint8_t TELNET_OPTION_DONT = 254;
 
   static const uint8_t TELNET_SB = 250;
   static const uint8_t TELNET_SE = 240;
@@ -90,8 +83,11 @@ class RemoteSocketIO final : public RemoteIO {
   std::optional<ScreenPos> screen_position() override;
 
 private:
-  void HandleTelnetIAC(unsigned char nCmd, unsigned char nParam);
+  // Handles an IAC and returns the number of characters to skip
+  int HandleTelnetIAC(const char* buffer, int end);
   void InboundTelnetProc();
+
+  Nvt nvt_;
 
   std::deque<char> queue_;
   mutable std::mutex mu_;

@@ -27,7 +27,7 @@
 using namespace wwiv::common;
 using namespace testing;
 
-std::string DumpQueue(std::deque<char>& q) {
+static std::string DumpQueue(std::deque<char>& q) {
   std::ostringstream ss;
   while (!q.empty()) {
     uint8_t c = q.front();
@@ -79,6 +79,20 @@ TEST(RemoteSocketIOTest, TwoFFAtEnd) {
   io.set_binary_mode(true);
   io.AddStringToInputBuffer(0, 5, "\x1\x0\x2\xff\xff");
   EXPECT_EQ(io.queue().size(), 4u) << DumpQueue(io.queue());
+}
+
+TEST(RemoteSocketIOTest, Small) {
+  RemoteSocketIO io(1, true);
+  io.set_binary_mode(false);
+  io.AddStringToInputBuffer(0, 1, "\xff");
+  EXPECT_EQ(io.queue().size(), 0u) << DumpQueue(io.queue());
+}
+
+TEST(RemoteSocketIOTest, WillEcho) {
+  RemoteSocketIO io(1, true);
+  io.set_binary_mode(false);
+  io.AddStringToInputBuffer(0, 3, "\xff\xFD\x01");
+  EXPECT_EQ(io.queue().size(), 0u) << DumpQueue(io.queue());
 }
 
 //TEST(RemoteSocketIOTest, DSR_Smoke) {
