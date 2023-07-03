@@ -423,6 +423,13 @@ std::optional<ScreenPos> RemoteSocketIO::screen_position() {
   return std::nullopt;
 }
 
+static std::string Dump(const char* buffer, int end) {
+  std::ostringstream ss;
+  for (int i = 0; i < end; i++) {
+    ss << fmt::format("[{:x}]", static_cast<uint8_t>(*buffer++));
+  }
+  return ss.str();
+}
 
 int RemoteSocketIO::HandleTelnetIAC(const char* buffer, int end) {
   CHECK_GE(end, 2);
@@ -439,7 +446,13 @@ int RemoteSocketIO::HandleTelnetIAC(const char* buffer, int end) {
       case Nvt::Option::SUPPRESS_GA: {
         nvt_.send_ack(seq.cmd, seq.opt, this);
       } break;
+      case Nvt::Option::ECHO: {
+        // We don't echo to auto echo
+        nvt_.send_nak(seq.cmd, seq.opt, this);
+        set_binary_mode(false);
+      } break;
       default:
+        LOG(WARNING) << "NAKing positive Unhandled IAC Request: " << to_string(seq);
         nvt_.send_nak(seq.cmd, seq.opt, this);
       }
     }
@@ -449,7 +462,12 @@ int RemoteSocketIO::HandleTelnetIAC(const char* buffer, int end) {
         nvt_.send_nak(seq.cmd, seq.opt, this);
         set_binary_mode(false);
         break;
+      case Nvt::Option::ECHO: {
+        nvt_.send_nak(seq.cmd, seq.opt, this);
+        set_binary_mode(false);
+      } break;
       default:
+        LOG(WARNING) << "NAKing Negative Unhandled IAC Request: " << to_string(seq);
         nvt_.send_nak(seq.cmd, seq.opt, this);
         break;
       }
@@ -460,9 +478,12 @@ int RemoteSocketIO::HandleTelnetIAC(const char* buffer, int end) {
     }
     return seq.length;
   }
+  else {
+    LOG(WARNING) << "Error parsing IAC Sequence: " << Dump(buffer, end);
+    // not sure the length, guess 2
+    return 2;
+  }
 
-  // not sure the length, guess 2
-  return 2;
 }
 
 
